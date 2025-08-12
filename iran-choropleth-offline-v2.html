@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>نقشه آفلاین استان‌های ایران - پاکار (v2)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#0b1020;
+      --panel:#0f172a;
+      --panel-2:#111827;
+      --muted:#94a3b8;
+      --text:#e5e7eb;
+      --accent:#22d3ee;
+      --border:#1f2937;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Ubuntu,"Noto Sans Arabic","Vazirmatn","IRANSansX",Tahoma,Arial,sans-serif}
+    .app{display:grid;grid-template-columns:360px 1fr;grid-template-rows:auto 1fr;gap:14px;height:100%;padding:14px;box-sizing:border-box}
+    header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;background:var(--panel);border-radius:16px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+    header h1{margin:0;font-size:18px;font-weight:800}
+    header .hint{color:var(--muted);font-size:12px}
+    .side{background:var(--panel);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:12px;min-width:320px}
+    .main{background:var(--panel);border-radius:16px;position:relative;overflow:hidden;display:flex;flex-direction:column}
+    .toolbar{display:flex;flex-direction:column;gap:10px}
+    .row{display:flex;align-items:center;gap:8px}
+    label{font-size:13px;color:var(--muted);min-width:110px}
+    select,input[type="file"]{background:#0b1220;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:10px;font-size:13px;width:100%}
+    .legend{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+    .legend .box{width:18px;height:12px;border-radius:3px;border:1px solid rgba(255,255,255,.2)}
+    .mapwrap{position:relative;display:flex;flex-direction:column;gap:0;height:100%}
+    .mapheader{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);background:#0b1220;color:var(--muted)}
+    #map{position:relative;flex:1 1 auto;min-height:400px;overflow:auto;background:var(--panel-2)}
+    .map-inner{width:100%;height:100%;display:grid;place-items:center;padding:8px;box-sizing:border-box}
+    svg{max-width:100%;max-height:100%;width:100%;height:auto;display:block}
+    .prov{stroke:#0b1220;stroke-width:.5;cursor:pointer;transition:transform .05s ease-in-out}
+    .prov:hover{filter:brightness(1.12);transform:translateY(-1px)}
+    .selected{outline:2px solid #fff;outline-offset: -2px;filter:brightness(1.2) saturate(1.05)}
+    .tooltip{position:fixed;pointer-events:none;background:#0b1220;border:1px solid #334155;color:#e2e8f0;border-radius:8px;padding:6px 8px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:none;z-index:50}
+    .notice{background:#0b1220;color:#e2e8f0;border:1px dashed #334155;border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.7}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#0b1220;border:1px solid #1f2937;color:#cbd5e1;font-size:12px}
+    a{color:var(--accent);text-decoration:none}
+    footer{grid-column:1/-1;color:#64748b;text-align:center;font-size:11px}
+    table{width:100%;border-collapse:separate;border-spacing:0 6px}
+    th{font-size:12px;color:#94a3b8;text-align:right;font-weight:600}
+    td{background:#091022;border:1px solid var(--border);padding:8px 10px;border-radius:8px}
+    .kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+    .kpi{background:#091022;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+    .kpi .label{font-size:12px;color:#8ca0b3}
+    .kpi .value{font-weight:800;font-size:16px}
+    .hidden{display:none}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>نقشه آفلاین استان‌های ایران (کلروپلت) – نسخه ۲</h1>
+      <div class="hint">این فایل آفلاین است. فایل‌های <span class="chip">data.csv</span> و <span class="chip">ir.svg</span> کنار همین HTML باشند.</div>
+    </div>
+    <div class="row">
+      <span class="chip">پاکار استودیو</span>
+    </div>
+  </header>
+
+  <aside class="side">
+    <div class="toolbar">
+      <div class="row"><label>شاخص:</label>
+        <select id="metric"></select>
+      </div>
+      <div class="row"><label>روش رنگ‌دهی:</label>
+        <select id="scale">
+          <option value="quantile">Quantile (صدکی)</option>
+          <option value="equal">Equal Interval (بازه مساوی)</option>
+          <option value="jenks">Jenks (طبیعی)</option>
+        </select>
+      </div>
+      <div class="row"><label>کلاس رنگ:</label>
+        <select id="classes">
+          <option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option>
+        </select>
+      </div>
+      <div class="row"><label>CSV دلخواه:</label><input id="csv" type="file" accept=".csv" /></div>
+      <div class="row"><label>SVG دلخواه:</label><input id="svg" type="file" accept=".svg" /></div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div id="details" class="hidden">
+      <h3 style="margin:8px 0 4px 0;font-size:14px">جزئیات استان</h3>
+      <div class="kpis">
+        <div class="kpi"><div class="label">استان</div><div class="value" id="d_name">—</div></div>
+        <div class="kpi"><div class="label">کد</div><div class="value" id="d_code">—</div></div>
+      </div>
+      <table id="d_table"><thead><tr id="d_head"></tr></thead><tbody id="d_body"></tbody></table>
+    </div>
+  </aside>
+
+  <section class="main">
+    <div class="mapwrap">
+      <div class="mapheader">
+        <div>Hover = پیش‌نمایش، Click = انتخاب/قفل</div>
+        <div id="summary">—</div>
+      </div>
+      <div id="map">
+        <div class="map-inner" id="mapInner"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>نسخه‌ی آفلاین. بدون اینترنت کار می‌کند (تا وقتی ir.svg و data.csv در همان پوشه باشند).</footer>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// --- Province names (IR01..IR31) ---
+const provinceNames = {
+ "IR01":"آذربایجان شرقی","IR02":"آذربایجان غربی","IR03":"اردبیل","IR04":"اصفهان","IR05":"ایلام","IR06":"بوشهر",
+ "IR07":"تهران","IR08":"چهارمحال و بختیاری","IR09":"البرز","IR10":"خوزستان","IR11":"زنجان","IR12":"سمنان",
+ "IR13":"سیستان و بلوچستان","IR14":"فارس","IR15":"کرمان","IR16":"کردستان","IR17":"کرمانشاه","IR18":"کهگیلویه و بویراحمد",
+ "IR19":"گیلان","IR20":"لرستان","IR21":"مازندران","IR22":"مرکزی","IR23":"هرمزگان","IR24":"همدان","IR25":"یزد",
+ "IR26":"قم","IR27":"گلستان","IR28":"قزوین","IR29":"خراسان جنوبی","IR30":"خراسان رضوی","IR31":"خراسان شمالی"
+};
+
+// --- Colors ---
+function lerp(a,b,t){return a+(b-a)*t}
+function ramp(t){ const a=[34,99,169], b=[34,211,238]; const r=Math.round(lerp(a[0],b[0],t)), g=Math.round(lerp(a[1],b[1],t)), bl=Math.round(lerp(a[2],b[2],t)); return `rgb(${r},${g},${bl})`;}
+
+// --- Jenks ---
+function jenks(data, k){
+  const n=data.length; if(k<=1||n==0) return [Math.min(...data), Math.max(...data)];
+  data = [...data].sort((a,b)=>a-b);
+  const mat1=Array.from({length:n+1}, _=>Array(k+1).fill(0));
+  const mat2=Array.from({length:n+1}, _=>Array(k+1).fill(0));
+  for(let i=1;i<=k;i++){ mat1[0][i]=1; mat2[0][i]=0; for(let j=1;j<=n;j++) mat2[j][i]=Infinity; }
+  let v=0;
+  for(let l=2;l<=n;l++){
+    let s1=0,s2=0,w=0;
+    for(let m=1;m<=l;m++){
+      const i3 = l - m + 1; const val = data[i3-1];
+      s2 += val*val; s1 += val; w++;
+      v = s2 - (s1*s1)/w;
+      if(i3!==1){
+        for(let j=2;j<=k;j++){
+          if(mat2[l][j] >= (v + mat2[i3-1][j-1])){
+            mat1[l][j] = i3; mat2[l][j] = v + mat2[i3-1][j-1];
+          }
+        }
+      }
+    }
+    mat1[l][1]=1; mat2[l][1]=v;
+  }
+  const breaks = Array(k+1).fill(0); breaks[k]=data[n-1]; breaks[0]=data[0];
+  let cnt=n, kclass=k;
+  while(kclass>1){ const id = parseInt(mat1[cnt][kclass]-2); breaks[kclass-1]=data[id]; cnt=parseInt(mat1[cnt][kclass]-1); kclass--; }
+  return breaks;
+}
+
+// --- Globals ---
+let svgText = null;
+let dataRows = null;
+let selectedCode = null;
+
+// Load defaults
+async function loadDefaultCSV(){ const resp = await fetch('data.csv').catch(()=>null); if(resp && resp.ok){ parseCSV(await resp.text()); } }
+async function loadDefaultSVG(){ const resp = await fetch('ir.svg').catch(()=>null); if(resp && resp.ok){ svgText = await resp.text(); render(); } }
+
+// Parse CSV
+function parseCSV(csv){
+  const [headerLine, ...lines] = csv.trim().split(/\r?\n/);
+  const headers = headerLine.split(',').map(h=>h.trim());
+  dataRows = lines.map(line=>{
+    const parts = line.split(',').map(v=>v.trim());
+    const obj={}; headers.forEach((h,i)=>obj[h]=isNaN(parts[i])?parts[i]:Number(parts[i]));
+    return obj;
+  });
+  populateMetricSelector(headers.filter(h=>h!=='code' && h!=='province'));
+  render();
+}
+
+// UI binds
+function populateMetricSelector(metrics){
+  const sel = document.getElementById('metric');
+  sel.innerHTML = metrics.map((m,i)=>`<option value="${m}" ${i===0?'selected':''}>${m}</option>`).join('');
+  sel.addEventListener('change', render);
+  document.getElementById('scale').addEventListener('change', render);
+  document.getElementById('classes').addEventListener('change', render);
+}
+
+// Classification
+function classify(values, method, k){
+  const nums = values.filter(v=>typeof v==='number' && !isNaN(v));
+  let breaks;
+  if(method==='equal'){
+    const min=Math.min(...nums), max=Math.max(...nums);
+    breaks=[min]; const step=(max-min)/k; for(let i=1;i<k;i++) breaks.push(min+step*i); breaks.push(max);
+  }else if(method==='jenks'){
+    breaks = jenks(nums,k);
+  }else{
+    const sorted=[...nums].sort((a,b)=>a-b);
+    breaks=[sorted[0]];
+    for(let i=1;i<k;i++){ const q = sorted[Math.floor(i*sorted.length/k)]; breaks.push(q); }
+    breaks.push(sorted[sorted.length-1]);
+  }
+  return breaks;
+}
+function colorFor(value, breaks){
+  if(value==null || isNaN(value)) return 'rgba(148,163,184,.25)';
+  const min=breaks[0], max=breaks[breaks.length-1];
+  if(max===min) return ramp(1);
+  // find bucket
+  let idx=1;
+  for(let i=1;i<breaks.length;i++){ if(value<=breaks[i]){ idx=i; break; } }
+  const t = idx/(breaks.length-1);
+  return ramp(Math.max(0, Math.min(1, t)));
+}
+function fmt(x){ return (x==null || isNaN(x)) ? '—' : new Intl.NumberFormat('fa-IR').format(x); }
+
+function makeLegend(breaks){
+  const el = document.getElementById('legend');
+  el.innerHTML='';
+  for(let i=1;i<breaks.length;i++){
+    const box = document.createElement('span'); box.className='box'; box.style.background=ramp(i/(breaks.length-1));
+    const label = document.createElement('span'); label.textContent = `${fmt(breaks[i-1])} تا ${fmt(breaks[i])}`;
+    el.appendChild(box); el.appendChild(label);
+  }
+}
+
+// Tooltip + selection
+function attachInteractions(svgRoot, dataMap, metric){
+  const tip = document.getElementById('tooltip');
+  svgRoot.addEventListener('mousemove', (e)=>{
+    const t=e.target;
+    if(t.classList.contains('prov')){
+      const id=t.getAttribute('data-code');
+      const rec = dataMap.get(id);
+      const title = provinceNames[id] || t.getAttribute('data-name') || id;
+      const val = rec ? rec[metric] : null;
+      tip.innerHTML = `<b>${title}</b><br>${metric}: <b>${fmt(val)}</b>`;
+      tip.style.left = (e.clientX+12)+'px'; tip.style.top = (e.clientY+12)+'px'; tip.style.display='block';
+      // preview on hover if nothing selected
+      if(!selectedCode){ updateDetails(id, rec); }
+    }else{
+      tip.style.display='none';
+      if(!selectedCode){ clearDetails(); }
+    }
+  });
+  svgRoot.addEventListener('mouseleave', ()=>{ tip.style.display='none'; if(!selectedCode){ clearDetails(); } });
+  // click to lock/unlock
+  svgRoot.addEventListener('click', (e)=>{
+    const t=e.target;
+    if(!t.classList.contains('prov')) return;
+    const id = t.getAttribute('data-code');
+    if(selectedCode === id){ // unselect
+      selectedCode = null;
+      svgRoot.querySelectorAll('.selected').forEach(n=>n.classList.remove('selected'));
+      clearDetails();
+    }else{
+      selectedCode = id;
+      svgRoot.querySelectorAll('.selected').forEach(n=>n.classList.remove('selected'));
+      t.classList.add('selected');
+      const rec = dataMap.get(id);
+      updateDetails(id, rec);
+    }
+  });
+}
+
+// Details panel
+function updateDetails(code, rec){
+  const panel = document.getElementById('details');
+  panel.classList.remove('hidden');
+  document.getElementById('d_name').textContent = provinceNames[code] || '—';
+  document.getElementById('d_code').textContent = code || '—';
+
+  const head = document.getElementById('d_head');
+  const body = document.getElementById('d_body');
+  head.innerHTML=''; body.innerHTML='';
+
+  if(!rec){ body.innerHTML = '<tr><td>داده‌ای موجود نیست.</td></tr>'; return; }
+
+  // Build table as key/value for all numeric/known fields except code/province
+  const keys = Object.keys(rec).filter(k=>k!=='code' && k!=='province');
+  // header
+  head.innerHTML = '<th>شاخص</th><th>مقدار</th>';
+  keys.forEach(k=>{
+    const tr = document.createElement('tr');
+    const td1 = document.createElement('td'); td1.textContent = k;
+    const td2 = document.createElement('td'); td2.textContent = fmt(rec[k]);
+    tr.appendChild(td1); tr.appendChild(td2);
+    body.appendChild(tr);
+  });
+}
+function clearDetails(){
+  const panel = document.getElementById('details');
+  document.getElementById('d_name').textContent='—';
+  document.getElementById('d_code').textContent='—';
+  document.getElementById('d_head').innerHTML=''; document.getElementById('d_body').innerHTML='';
+  panel.classList.add('hidden');
+}
+
+// Normalize province id
+function normalizeProvinceId(str){
+  if(!str) return null;
+  str = String(str).trim();
+  if(/^IR\d{2}$/.test(str)) return str;
+  const mapEN={
+    "East Azarbaijan":"IR01","West Azarbaijan":"IR02","Ardebil":"IR03","Esfahan":"IR04","Ilam":"IR05","Bushehr":"IR06","Tehran":"IR07",
+    "Chahar Mahall and Bakhtiari":"IR08","Alborz":"IR09","Khuzestan":"IR10","Zanjan":"IR11","Semnan":"IR12","Sistan and Baluchestan":"IR13",
+    "Fars":"IR14","Kerman":"IR15","Kordestan":"IR16","Kermanshah":"IR17","Kohgiluyeh and Buyer Ahmad":"IR18","Gilan":"IR19","Lorestan":"IR20",
+    "Mazandaran":"IR21","Markazi":"IR22","Hormozgan":"IR23","Hamadan":"IR24","Yazd":"IR25","Qom":"IR26","Golestan":"IR27","Qazvin":"IR28",
+    "South Khorasan":"IR29","Razavi Khorasan":"IR30","North Khorasan":"IR31"
+  };
+  return mapEN[str] || null;
+}
+
+// Render
+async function render(){
+  const mapDiv = document.getElementById('mapInner');
+  mapDiv.innerHTML = '';
+  document.getElementById('summary').textContent = '—';
+
+  if(!svgText){
+    mapDiv.innerHTML = `<div class="notice">فایل نقشه پیدا نشد. فایل <b>ir.svg</b> را کنار این فایل قرار دهید یا از «SVG دلخواه» بارگذاری کنید.</div>`;
+    return;
+  }
+  if(!dataRows){
+    mapDiv.innerHTML = `<div class="notice">فایل داده پیدا نشد. فایل <b>data.csv</b> را کنار این فایل قرار دهید یا از «CSV دلخواه» بارگذاری کنید.</div>`;
+    return;
+  }
+
+  const metric = document.getElementById('metric').value;
+  const method = document.getElementById('scale').value;
+  const k = parseInt(document.getElementById('classes').value,10);
+
+  // Build data map
+  const dataMap = new Map();
+  dataRows.forEach(r=>{ if(r.code) dataMap.set(String(r.code).trim(), r); });
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgText, 'image/svg+xml');
+  const svgEl = doc.documentElement;
+
+  // Make sure viewbox is present (best effort)
+  if(!svgEl.getAttribute('viewBox')){
+    // Try to infer from width/height attributes
+    const w = parseFloat(svgEl.getAttribute('width')) || 1000;
+    const h = parseFloat(svgEl.getAttribute('height')) || 800;
+    svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    svgEl.removeAttribute('width'); svgEl.removeAttribute('height');
+    svgEl.setAttribute('preserveAspectRatio','xMidYMid meet');
+  } else {
+    svgEl.setAttribute('preserveAspectRatio','xMidYMid meet');
+  }
+
+  // find shapes
+  const shapes = [];
+  svgEl.querySelectorAll('[id^="IR"],[data-id],[data-name],path,polygon').forEach(el=>{
+    const rawId = el.getAttribute('id') || el.getAttribute('data-id') || el.getAttribute('name') || el.getAttribute('data-name');
+    let code = null;
+    if(rawId && /^IR\d{2}$/.test(rawId)) code = rawId;
+    if(!code && rawId) code = normalizeProvinceId(rawId);
+    if(code && (el.tagName==='path' || el.tagName==='polygon' || el.tagName==='g')){
+      if(el.tagName==='g'){
+        el.querySelectorAll('path,polygon').forEach(p=>{ p.classList.add('prov'); p.setAttribute('data-code',code); });
+      }else{
+        el.classList.add('prov'); el.setAttribute('data-code',code);
+      }
+      const enName = el.getAttribute('name') || el.getAttribute('data-name') || rawId;
+      const name = provinceNames[code] || enName || code;
+      el.setAttribute('data-name', name);
+      shapes.push(el);
+    }
+  });
+
+  // Compute breaks
+  const values = Array.from(dataMap.values()).map(r=>r[metric]).filter(v=>typeof v==='number' && !isNaN(v));
+  const breaks = classify(values, method, k);
+  makeLegend(breaks);
+
+  // Paint
+  let colored=0;
+  shapes.forEach(el=>{
+    const code = el.getAttribute('data-code');
+    const rec = dataMap.get(code);
+    const val = rec ? rec[metric] : null;
+    el.style.fill = colorFor(val, breaks);
+    if(val!=null && !isNaN(val)) colored++;
+  });
+
+  // Mount
+  const wrap = document.createElement('div');
+  wrap.style.width='100%'; wrap.style.height='100%';
+  wrap.appendChild(svgEl);
+  mapDiv.appendChild(wrap);
+
+  // Interactions
+  attachInteractions(wrap, dataMap, metric);
+
+  // Summary
+  const avg = values.length ? (values.reduce((a,b)=>a+b,0)/values.length) : null;
+  document.getElementById('summary').textContent = `استان‌های رنگ‌شده: ${colored} / 31 — میانگین ${metric}: ${fmt(avg)}`;
+}
+
+// Inputs
+document.getElementById('csv').addEventListener('change', async (e)=>{ const f=e.target.files[0]; if(!f) return; parseCSV(await f.text()); });
+document.getElementById('svg').addEventListener('change', async (e)=>{ const f=e.target.files[0]; if(!f) return; svgText = await f.text(); render(); });
+
+// Boot
+loadDefaultCSV();
+loadDefaultSVG();
+</script>
+</body>
+</html>
